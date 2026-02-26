@@ -60,6 +60,7 @@ TEXTS = {
         "exclude_prompt": "Silmek istemediğiniz DM kullanıcı adlarını yazın (virgülle ayırın, boş bırakırsanız hepsi işlenir):",
         "exclude_example": "Örnek: murrez,aslanakbey",
         "excluded_label": "(hariç tutuldu)",
+        "skip_forbidden": "Atlandı (silinemiyor, 403/404): %s",
     },
     "en": {
         "token_not_set": "DISCORD_TOKEN not set. Create a .env file with DISCORD_TOKEN=your_token",
@@ -83,6 +84,7 @@ TEXTS = {
         "exclude_prompt": "Enter usernames to EXCLUDE from deletion (comma-separated, or leave empty for none):",
         "exclude_example": "Example: murrez,aslanakbey",
         "excluded_label": "(excluded)",
+        "skip_forbidden": "Skipped (cannot delete, 403/404): %s",
     },
 }
 
@@ -188,7 +190,7 @@ def delete_message(
     token: str, channel_id: str, message_id: str, dry_run: bool
 ) -> bool:
     """
-    Delete a single message. Returns True on success or dry run, False on 429.
+    Delete a single message. Returns True on success, dry run, or skip (403/404); False on 429.
     """
     if dry_run:
         return True
@@ -200,6 +202,11 @@ def delete_message(
     if r.status_code == 429:
         return False
     if r.status_code in (200, 204):
+        return True
+    if r.status_code in (403, 404):
+        # Forbidden or Not Found: message may be too old, already deleted, or no permission — skip
+        short_id = message_id[:18] + "..." if len(message_id) > 18 else message_id
+        logger.warning("%s", Fore.YELLOW + (t("skip_forbidden") % short_id) + Style.RESET_ALL)
         return True
     r.raise_for_status()
     return True
